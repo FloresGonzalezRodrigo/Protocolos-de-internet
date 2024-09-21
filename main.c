@@ -9,18 +9,19 @@
 #include <arpa/inet.h>
 #include <linux/if_ether.h>
 #include "pila.h"
+#define BUFFER 1024
 
 int main(void) {
+    char* buffer=malloc(1024);
     Pila *pdest=NULL, *psource=NULL;
     char nombre_fichero[32];
     unsigned short ntramas_ip=0,ntramas_ipv6=0;
     int sockfd;
-    ssize_t nbytes;
+    ssize_t ttrama;
     unsigned short ntramas;
-    struct sockaddr direccion;
     // ETHernetHeaDeR
-    struct ethhdr trama;
-    socklen_t  sdireccion=sizeof(struct sockaddr);
+    struct ethhdr* trama;
+    socklen_t  tdireccion=sizeof(struct sockaddr);
     // InterFaceREQuest
     struct ifreq nic;
 
@@ -58,14 +59,17 @@ int main(void) {
     }
 
     while(ntramas) {
-        nbytes=recvfrom(sockfd,&trama,sizeof(struct ethhdr),0,&direccion,&sdireccion);
-        if(nbytes==-1) {
+        ttrama=recv(sockfd,buffer,sizeof(struct ethhdr),0);
+        if(ttrama==-1) {
             perror("ERROR EN RECVFROM");
             close(sockfd);
             exit(EXIT_FAILURE);
         }
 
-        switch(ntohs(trama.h_proto)) {
+        realloc(buffer,sizeof(buffer));
+        trama=(struct ethhdr*)buffer;
+
+        switch(ntohs(trama->h_proto)) {
             case ETH_P_IP:
                 ntramas_ip++;
             break;
@@ -76,22 +80,23 @@ int main(void) {
                 continue;
         }
 
-        pdest=contar(pdest,trama.h_dest,ETH_ALEN);
-        psource=contar(psource,trama.h_source,ETH_ALEN);
+        pdest=contar(pdest,trama->h_dest,ETH_ALEN);
+        psource=contar(psource,trama->h_source,ETH_ALEN);
 
-        printf("MAC fuente: %02x:%02x:%02x:%02x:%02x:%02x\n" , trama.h_source[0],trama.h_source[1],trama.h_source[2],trama.h_source[3],trama.h_source[4],trama.h_source[5]);
-        printf("MAC destino: %02x:%02x:%02x:%02x:%02x:%02x\n" , trama.h_dest[0],trama.h_dest[1],trama.h_dest[2],trama.h_dest[3],trama.h_dest[4],trama.h_dest[5]);
+        printf("MAC fuente: %02x:%02x:%02x:%02x:%02x:%02x\n" , trama->h_source[0],trama->h_source[1],trama->h_source[2],trama->h_source[3],trama->h_source[4],trama->h_source[5]);
+        printf("MAC destino: %02x:%02x:%02x:%02x:%02x:%02x\n" , trama->h_dest[0],trama->h_dest[1],trama->h_dest[2],trama->h_dest[3],trama->h_dest[4],trama->h_dest[5]);
 
         // NetworkTOHostShort: CONVIERTE UN VALOR DE 16 BITS BIG-ENDIAN (QUE ES EL ORDEN QUE USAN LAS REDES)
         //                     AL ORDEN DEL HOST
-        printf("Protocolo: 0x%04x\n", htons(trama.h_proto));
-        printf("Longitud de la trama: %zd\n", nbytes);
+        printf("Protocolo: 0x%04x\n", htons(trama->h_proto));
+        printf("Longitud de la trama: %zd\n", ttrama);
 
         // ETH_HLEN: LONGITUD DEL ENCABEZADO DE UNA TRAMA ETHERNET
-        printf("Longitud de la carga útil: %zd\n\n", nbytes-ETH_HLEN);
+        printf("Longitud de la carga útil: %zd\n\n", ttrama-ETH_HLEN);
         --ntramas;
     }
     close(sockfd);
+    free(buffer);
 
     printf("Introduce el nombre del fichero dónde quieres guardar las estadisticas: ");
     scanf("%s",nombre_fichero);
